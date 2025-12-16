@@ -3,56 +3,92 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 // Función para extraer parámetros del hash o query string
 function getTokenFromUrl() {
+    console.log('🔍 Buscando token...');
+    
     // Intentar primero desde el hash (#)
-    let params = new URLSearchParams(window.location.hash.substring(1));
+    const hash = window.location.hash.substring(1);
+    console.log('Hash encontrado:', hash);
+    let params = new URLSearchParams(hash);
     let accessToken = params.get('access_token');
     
     // Si no está en el hash, intentar desde query string (?)
     if (!accessToken) {
-        params = new URLSearchParams(window.location.search);
+        console.log('No hay token en hash, buscando en query string...');
+        const search = window.location.search.substring(1);
+        console.log('Query string encontrado:', search);
+        params = new URLSearchParams(search);
         accessToken = params.get('access_token');
+        
+        // También probar con 'token' (por si acaso)
+        if (!accessToken) {
+            accessToken = params.get('token');
+        }
     }
     
-    return {
+    const result = {
         accessToken,
         type: params.get('type'),
         error: params.get('error'),
         errorDescription: params.get('error_description')
     };
+    
+    console.log('Resultado de búsqueda:', result);
+    return result;
 }
 
 // Debug mejorado al cargar
-console.log('=== DEBUG INFO ===');
-console.log('URL completa:', window.location.href);
-console.log('Hash:', window.location.hash);
-console.log('Search:', window.location.search);
+console.log('=== 🚀 INICIANDO PÁGINA DE RESET ===');
+console.log('📍 URL completa:', window.location.href);
+console.log('🔗 Protocol:', window.location.protocol);
+console.log('🌐 Host:', window.location.host);
+console.log('📂 Pathname:', window.location.pathname);
+console.log('❓ Search (query):', window.location.search);
+console.log('#️⃣ Hash:', window.location.hash);
+console.log('=====================================');
 
 // Verificar token al cargar la página
 window.addEventListener('DOMContentLoaded', () => {
-    const { accessToken, type, error, errorDescription } = getTokenFromUrl();
+    console.log('📄 DOM cargado, verificando token...');
     
-    console.log('Token encontrado:', accessToken ? 'Sí' : 'No');
-    console.log('Tipo:', type);
+    const { accessToken, type, error, errorDescription } = getTokenFromUrl();
     
     const errorDiv = document.getElementById('error');
     
     if (error) {
+        console.error('❌ Error en URL:', error);
         errorDiv.textContent = `Error: ${errorDescription || error}`;
         errorDiv.style.display = 'block';
         return;
     }
 
     if (!accessToken) {
-        errorDiv.textContent = 'No se ha encontrado el token en la URL. Asegúrate de usar el enlace del email.';
+        console.warn('⚠️ No se encontró token en la URL');
+        console.log('💡 La URL debe verse así:');
+        console.log('   http://localhost:3000/reset-password#access_token=xxxxx&type=recovery');
+        console.log('   O:');
+        console.log('   http://localhost:3000/reset-password?access_token=xxxxx&type=recovery');
+        
+        errorDiv.innerHTML = `
+            <strong>No se encontró el token en la URL.</strong><br><br>
+            <strong>Posibles causas:</strong><br>
+            1. No usaste el enlace del email<br>
+            2. La URL de redirección no está configurada en Supabase<br>
+            3. El email de Supabase no incluye el token<br><br>
+            <strong>URL actual:</strong><br>
+            <code style="font-size: 12px; word-break: break-all;">${window.location.href}</code>
+        `;
         errorDiv.style.display = 'block';
     } else {
-        console.log('Token válido detectado (primeros 20 chars):', accessToken.substring(0, 20) + '...');
+        console.log('✅ Token válido detectado!');
+        console.log('Token (primeros 20 chars):', accessToken.substring(0, 20) + '...');
+        console.log('Tipo:', type);
     }
 });
 
 // Manejar el envío del formulario
 document.getElementById('resetForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    console.log('📝 Formulario enviado');
 
     const password = document.getElementById('password').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
@@ -68,12 +104,14 @@ document.getElementById('resetForm').addEventListener('submit', async (e) => {
 
     // Validaciones
     if (password !== confirmPassword) {
+        console.warn('⚠️ Las contraseñas no coinciden');
         errorDiv.textContent = 'Las contraseñas no coinciden';
         errorDiv.style.display = 'block';
         return;
     }
 
     if (password.length < 6) {
+        console.warn('⚠️ Contraseña muy corta');
         errorDiv.textContent = 'La contraseña debe tener al menos 6 caracteres';
         errorDiv.style.display = 'block';
         return;
@@ -82,10 +120,10 @@ document.getElementById('resetForm').addEventListener('submit', async (e) => {
     // Obtener token
     const { accessToken } = getTokenFromUrl();
 
-    console.log('Intentando actualizar contraseña...');
-    console.log('Token (primeros 20 chars):', accessToken?.substring(0, 20) + '...');
+    console.log('🔐 Intentando actualizar contraseña...');
 
     if (!accessToken) {
+        console.error('❌ No hay token disponible');
         errorDiv.textContent = 'Token no válido o expirado. Solicita un nuevo enlace de recuperación.';
         errorDiv.style.display = 'block';
         return;
@@ -97,6 +135,9 @@ document.getElementById('resetForm').addEventListener('submit', async (e) => {
     btnLoader.style.display = 'inline-block';
 
     try {
+        console.log('📡 Enviando petición a Supabase...');
+        console.log('URL:', `${SUPABASE_URL}/auth/v1/user`);
+        
         const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
             method: 'PUT',
             headers: {
@@ -108,15 +149,18 @@ document.getElementById('resetForm').addEventListener('submit', async (e) => {
         });
 
         const data = await response.json();
-        console.log('Respuesta de Supabase:', data);
+        console.log('📨 Respuesta de Supabase:', data);
+        console.log('Status:', response.status);
 
         if (response.ok) {
+            console.log('✅ Contraseña actualizada exitosamente!');
             successDiv.textContent = '¡Contraseña actualizada exitosamente!';
             successDiv.style.display = 'block';
             document.getElementById('resetForm').reset();
 
             // Cerrar ventana después de 3 segundos
             setTimeout(() => {
+                console.log('🚪 Cerrando ventana...');
                 window.close();
                 // Si no se puede cerrar, redirigir
                 if (!window.closed) {
@@ -124,12 +168,12 @@ document.getElementById('resetForm').addEventListener('submit', async (e) => {
                 }
             }, 3000);
         } else {
-            console.error('Error de Supabase:', data);
+            console.error('❌ Error de Supabase:', data);
             errorDiv.textContent = data.msg || data.message || 'Error al actualizar la contraseña';
             errorDiv.style.display = 'block';
         }
     } catch (error) {
-        console.error('Error de red:', error);
+        console.error('❌ Error de red:', error);
         errorDiv.textContent = 'Error de conexión: ' + error.message;
         errorDiv.style.display = 'block';
     } finally {
